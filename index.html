@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ghost Churn Calculator</title>
+<meta name="description" content="31% of Google Play subscriber churn is involuntary. Calculate how many of your churned users didn't actually cancel.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..900&family=JetBrains+Mono:wght@400..800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#fafaf8;
+    --surface:#fff;
+    --border:rgba(0,0,0,0.06);
+    --border-hover:rgba(0,0,0,0.12);
+    --text:#111;
+    --text-2:#555;
+    --text-3:#999;
+    --red:#e03e3e;
+    --red-soft:#f06060;
+    --red-bg:#fef2f2;
+    --red-border:rgba(224,62,62,0.12);
+    --green:#0d7c5f;
+    --green-bg:#ecfdf5;
+    --green-border:rgba(13,124,95,0.12);
+    --accent:#4f46e5;
+    --accent-bg:#eef2ff;
+    --forest:#0f2e1a;
+  }
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    background:var(--bg);color:var(--text);
+    line-height:1.6;-webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+
+  .container{max-width:720px;margin:0 auto;padding:0 1.5rem}
+
+  /* ── Clip-path reveal (Ease Health inspired) ── */
+  .reveal{
+    clip-path:inset(8% 4% 8% 4% round 16px);
+    opacity:0.3;
+    transform:scale(0.97);
+    transition:clip-path 1.2s cubic-bezier(0.2,0,0.2,1),
+               opacity 1s cubic-bezier(0.2,0,0.2,1),
+               transform 1s cubic-bezier(0.2,0,0.2,1);
+  }
+  .reveal.visible{
+    clip-path:inset(0% 0% 0% 0% round 0px);
+    opacity:1;
+    transform:scale(1);
+  }
+
+  /* ── Nav pill ── */
+  .nav{
+    position:fixed;top:1.25rem;left:50%;transform:translateX(-50%);z-index:100;
+    display:flex;align-items:center;gap:0.75rem;
+    background:rgba(255,255,255,0.85);backdrop-filter:blur(20px);
+    border:1px solid var(--border);border-radius:100px;
+    padding:0.5rem 0.5rem 0.5rem 1.25rem;
+    font-size:0.8rem;font-weight:600;
+    box-shadow:0 2px 20px rgba(0,0,0,0.04);
+    transition:transform 0.5s cubic-bezier(0.2,0,0.2,1);
+  }
+  .nav.hidden{transform:translateX(-50%) translateY(-140%)}
+  .nav-name{color:var(--text);letter-spacing:-0.02em}
+  .nav-btn{
+    display:flex;align-items:center;gap:4px;
+    background:var(--forest);color:#fff;border:none;border-radius:100px;
+    padding:0.5rem 1rem;font-size:0.75rem;font-weight:600;
+    cursor:pointer;text-decoration:none;transition:all 0.3s;
+    font-family:'Inter',system-ui,sans-serif;
+  }
+  .nav-btn:hover{background:#1a4a28}
+  .nav-btn svg{width:12px;height:12px;transition:transform 0.3s}
+  .nav-btn:hover svg{transform:translateX(2px)}
+
+  /* ── Hero ── */
+  .hero{
+    min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    padding:6rem 1.5rem 4rem;position:relative;
+  }
+  .hero-tag{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--red-bg);border:1px solid var(--red-border);
+    border-radius:100px;padding:6px 16px;
+    font-size:0.72rem;font-weight:600;color:var(--red);
+    margin-bottom:2rem;letter-spacing:0.02em;
+  }
+  .hero-tag-dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .hero h1{
+    font-size:clamp(2.5rem,6vw,4.5rem);font-weight:800;
+    letter-spacing:-0.045em;line-height:1.05;
+    margin-bottom:1.5rem;max-width:680px;
+    color:var(--forest);
+  }
+  .hero h1 em{font-style:normal;color:var(--red)}
+  .hero p{
+    font-size:clamp(1rem,2vw,1.2rem);color:var(--text-2);
+    max-width:480px;line-height:1.7;font-weight:400;
+  }
+  .hero-scroll{
+    position:absolute;bottom:2.5rem;left:50%;transform:translateX(-50%);
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    color:var(--text-3);font-size:0.68rem;font-weight:600;
+    letter-spacing:0.1em;text-transform:uppercase;
+  }
+  .hero-scroll-line{width:1px;height:40px;background:var(--border);position:relative;overflow:hidden}
+  .hero-scroll-line::after{
+    content:'';position:absolute;top:-100%;left:0;width:1px;height:100%;
+    background:var(--text-3);animation:scrollLine 2s ease-in-out infinite;
+  }
+  @keyframes scrollLine{0%{top:-100%}50%{top:100%}100%{top:100%}}
+
+  /* ── Key Metrics (Ease Health style) ── */
+  .metrics{
+    padding:5rem 0;border-top:1px solid var(--border);
+    border-bottom:1px solid var(--border);
+  }
+  .metrics-inner{
+    display:grid;grid-template-columns:repeat(3,1fr);
+    gap:0;max-width:720px;margin:0 auto;
+  }
+  .metric-item{
+    text-align:center;padding:2rem 1rem;
+    position:relative;
+  }
+  .metric-item:not(:last-child)::after{
+    content:'';position:absolute;right:0;top:20%;height:60%;
+    width:1px;background:var(--border);
+  }
+  .metric-num{
+    font-size:clamp(2rem,4vw,3.25rem);font-weight:800;
+    font-family:'JetBrains Mono',monospace;letter-spacing:-0.04em;
+    line-height:1;margin-bottom:0.5rem;
+  }
+  .metric-label{font-size:0.78rem;color:var(--text-2);font-weight:500}
+  .metric-red .metric-num{color:var(--red)}
+  .metric-green .metric-num{color:var(--green)}
+
+  /* ── Calculator Card ── */
+  .calc-section{padding:5rem 0}
+  .calc-card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:24px;padding:clamp(2rem,4vw,3rem);
+    box-shadow:0 1px 3px rgba(0,0,0,0.02);
+    transition:box-shadow 0.4s;
+  }
+  .calc-card:hover{box-shadow:0 8px 40px rgba(0,0,0,0.04)}
+  .calc-header{margin-bottom:2.5rem}
+  .calc-header h2{font-size:1.5rem;font-weight:700;letter-spacing:-0.03em;margin-bottom:0.375rem}
+  .calc-header p{font-size:0.88rem;color:var(--text-2)}
+
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:2rem}
+  @media(max-width:500px){.form-grid{grid-template-columns:1fr}}
+  .field label{
+    display:block;font-size:0.72rem;font-weight:600;color:var(--text-3);
+    margin-bottom:0.5rem;letter-spacing:0.06em;text-transform:uppercase;
+  }
+  .field input[type=number]{
+    width:100%;background:var(--bg);border:1px solid var(--border);
+    border-radius:12px;padding:0.875rem 1rem;color:var(--text);
+    font-size:1.25rem;font-weight:700;font-family:'JetBrains Mono',monospace;
+    text-align:center;transition:all 0.3s;-moz-appearance:textfield;
+  }
+  .field input::-webkit-inner-spin-button{-webkit-appearance:none}
+  .field input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(224,62,62,0.06)}
+
+  .slider-wrap{margin-bottom:2rem;padding-bottom:2rem;border-bottom:1px solid var(--border)}
+  .slider-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.625rem}
+  .slider-top label{font-size:0.72rem;font-weight:600;color:var(--text-3);letter-spacing:0.06em;text-transform:uppercase}
+  .slider-val{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:0.85rem;color:var(--text)}
+  input[type=range]{
+    -webkit-appearance:none;width:100%;height:3px;border-radius:2px;
+    background:linear-gradient(90deg,var(--red) 0%,var(--red) var(--fill),var(--border) var(--fill),var(--border) 100%);
+    outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--surface);border:2px solid var(--red);cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,0.1);transition:transform 0.2s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+  .slider-note{font-size:0.7rem;color:var(--text-3);margin-top:0.5rem}
+
+  /* ── Results ── */
+  .results{display:none}
+  .results.show{display:block;animation:resultReveal 0.8s cubic-bezier(0.2,0,0.2,1)}
+  @keyframes resultReveal{
+    from{clip-path:inset(10% 5% 10% 5% round 16px);opacity:0}
+    to{clip-path:inset(0% 0% 0% 0% round 0px);opacity:1}
+  }
+
+  /* Hero stat */
+  .result-hero{text-align:center;padding:3rem 0}
+  .result-hero-num{
+    font-size:clamp(5rem,14vw,8rem);font-weight:900;
+    font-family:'JetBrains Mono',monospace;line-height:0.9;
+    color:var(--red);letter-spacing:-0.05em;
+  }
+  .result-hero-sub{font-size:1rem;color:var(--text-2);margin-top:0.75rem;font-weight:500}
+  .result-hero-sub span{color:var(--red);font-weight:700}
+
+  /* Ring */
+  .ring-section{display:flex;justify-content:center;padding:1.5rem 0 2.5rem}
+  .ring-wrap{position:relative;width:200px;height:200px}
+  .ring-svg{width:200px;height:200px;transform:rotate(-90deg)}
+  .ring-svg circle{fill:none;cx:100;cy:100;r:88}
+  .ring-track{stroke:var(--bg);stroke-width:6}
+  .ring-green{
+    stroke:var(--green);stroke-width:6;stroke-linecap:round;stroke-opacity:0.25;
+    stroke-dasharray:553;stroke-dashoffset:553;
+    transition:stroke-dashoffset 1.2s cubic-bezier(0.2,0,0.2,1) 0.1s;
+  }
+  .ring-red{
+    stroke:var(--red);stroke-width:8;stroke-linecap:round;
+    stroke-dasharray:553;stroke-dashoffset:553;
+    transition:stroke-dashoffset 1.2s cubic-bezier(0.2,0,0.2,1);
+  }
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring-num{font-size:2.5rem;font-weight:900;color:var(--red);font-family:'JetBrains Mono',monospace;line-height:1}
+  .ring-label{font-size:0.6rem;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.15em;margin-top:2px}
+
+  /* Split */
+  .split{display:grid;grid-template-columns:1fr 1fr;margin:2rem 0;border-radius:16px;overflow:hidden;border:1px solid var(--border)}
+  .split-item{padding:1.75rem;text-align:center}
+  .split-item:first-child{border-right:1px solid var(--border)}
+  .split-tag{
+    display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;font-weight:700;
+    text-transform:uppercase;letter-spacing:0.1em;padding:4px 12px;border-radius:100px;margin-bottom:0.75rem;
+  }
+  .split-num{font-size:2.25rem;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1.1;margin-bottom:4px}
+  .split-desc{font-size:0.75rem;color:var(--text-3);line-height:1.5}
+  .ghost-side .split-tag{background:var(--red-bg);color:var(--red)}
+  .ghost-side .split-num{color:var(--red)}
+  .real-side .split-tag{background:var(--green-bg);color:var(--green)}
+  .real-side .split-num{color:var(--green)}
+
+  /* Money */
+  .money-label{
+    font-size:0.68rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:0.12em;color:var(--text-3);margin:2.5rem 0 1rem;
+    display:flex;align-items:center;gap:12px;
+  }
+  .money-label::after{content:'';flex:1;height:1px;background:var(--border)}
+  .money-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  @media(max-width:500px){.money-grid{grid-template-columns:1fr}}
+  .money-card{
+    border:1px solid var(--border);border-radius:16px;padding:1.5rem;
+    text-align:center;transition:all 0.4s;cursor:default;
+  }
+  .money-card:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,0.04)}
+  .money-card .m-label{font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-3);margin-bottom:0.625rem}
+  .money-card .m-val{font-size:1.75rem;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1.1}
+  .money-card .m-sub{font-size:0.68rem;color:var(--text-3);margin-top:0.375rem;line-height:1.5}
+  .money-card.waste{background:var(--red-bg);border-color:var(--red-border)}
+  .money-card.waste .m-val{color:var(--red)}
+  .money-card.recover{background:var(--green-bg);border-color:var(--green-border)}
+  .money-card.recover .m-val{color:var(--green)}
+
+  /* Explainer */
+  .explainer{margin-top:2.5rem;padding:1.25rem 1.5rem;background:var(--bg);border-radius:12px;font-size:0.82rem;color:var(--text-2);line-height:1.8}
+  .explainer strong{color:var(--text);font-weight:600}
+
+  /* Source */
+  .source-line{text-align:center;margin-top:1.5rem;font-size:0.7rem;color:var(--text-3)}
+  .source-line a{color:var(--accent);text-decoration:none}
+
+  /* ── CTA ── */
+  .cta{padding:5rem 0;text-align:center}
+  .cta-inner{
+    background:var(--forest);color:#fff;border-radius:24px;
+    padding:clamp(2.5rem,5vw,4rem) clamp(2rem,4vw,3rem);
+    position:relative;overflow:hidden;
+  }
+  .cta-inner::before{
+    content:'';position:absolute;top:-50%;right:-20%;width:400px;height:400px;
+    border-radius:50%;background:rgba(255,255,255,0.03);pointer-events:none;
+  }
+  .cta-inner>*{position:relative;z-index:1}
+  .cta h3{font-size:clamp(1.25rem,3vw,1.75rem);font-weight:700;margin-bottom:0.75rem;letter-spacing:-0.02em}
+  .cta p{color:rgba(255,255,255,0.6);font-size:0.95rem;margin-bottom:2rem;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.7}
+  .cta-btn{
+    display:inline-flex;align-items:center;gap:8px;padding:0.875rem 2rem;
+    background:#fff;color:var(--forest);border:none;border-radius:100px;
+    font-size:0.9rem;font-weight:700;cursor:pointer;text-decoration:none;
+    transition:all 0.3s;font-family:'Inter',system-ui,sans-serif;
+  }
+  .cta-btn svg{width:14px;height:14px;transition:transform 0.3s}
+  .cta-btn:hover{box-shadow:0 4px 20px rgba(255,255,255,0.15)}
+  .cta-btn:hover svg{transform:translateX(3px)}
+  .cta-meta{display:flex;justify-content:center;gap:2rem;margin-top:1.25rem;font-size:0.75rem;color:rgba(255,255,255,0.4)}
+  .cta-meta span{display:flex;align-items:center;gap:5px}
+  .cta-meta span::before{content:'';width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.3)}
+  .also{margin-top:1rem;font-size:0.75rem;color:rgba(255,255,255,0.35)}
+  .also a{color:rgba(255,255,255,0.6);text-decoration:none}
+  .also a:hover{color:#fff}
+
+  /* ── Footer ── */
+  .footer{text-align:center;padding:2rem 0;font-size:0.72rem;color:var(--text-3)}
+  .footer a{color:var(--text-2);text-decoration:none}
+
+  @media(max-width:500px){
+    .hero{min-height:auto;padding:7rem 1.5rem 3rem}
+    .hero-scroll{display:none}
+    .metrics-inner{grid-template-columns:1fr}
+    .metric-item:not(:last-child)::after{display:none;width:60%;height:1px;top:auto;bottom:0;right:20%}
+    .metric-item{padding:1.25rem 1rem}
+    .split{grid-template-columns:1fr}
+    .split-item:first-child{border-right:none;border-bottom:1px solid var(--border)}
+    .nav{padding:0.375rem 0.375rem 0.375rem 1rem;font-size:0.75rem}
+    .cta-meta{flex-direction:column;gap:0.5rem;align-items:center}
+  }
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}}
+</style>
+</head>
+<body>
+
+<!-- Nav pill -->
+<nav class="nav" id="nav">
+  <span class="nav-name">Ghost Churn</span>
+  <a href="https://coreplan.airbridge.io/waitinglist?utm_source=ghost-churn-calculator&utm_medium=tool&utm_campaign=linkedin-gtm" class="nav-btn" target="_blank">
+    Get Core Plan
+    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6h8M7 3l3 3-3 3"/></svg>
+  </a>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-tag">
+    <span class="hero-tag-dot"></span>
+    SOSA 2026 Data
+  </div>
+  <h1>How much of your<br>churn is <em>ghost?</em></h1>
+  <p>31% of Google Play subscriber churn is involuntary — a failed credit card, not a cancellation. You're spending money winning back users who already want to stay.</p>
+  <div class="hero-scroll">
+    <div class="hero-scroll-line"></div>
+    Calculate
+  </div>
+</section>
+
+<!-- Key Metrics -->
+<section class="metrics reveal">
+  <div class="metrics-inner">
+    <div class="metric-item metric-red">
+      <div class="metric-num">31%</div>
+      <div class="metric-label">Google Play churn is involuntary</div>
+    </div>
+    <div class="metric-item">
+      <div class="metric-num">0/21</div>
+      <div class="metric-label">teams track this by channel</div>
+    </div>
+    <div class="metric-item metric-green">
+      <div class="metric-num">20-40%</div>
+      <div class="metric-label">recoverable via billing retry</div>
+    </div>
+  </div>
+</section>
+
+<!-- Calculator -->
+<section class="calc-section">
+  <div class="container">
+    <div class="calc-card reveal">
+      <div class="calc-header">
+        <h2>Calculate your ghost churn</h2>
+        <p>Two inputs. Five seconds. See what you're missing.</p>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Monthly churned subscribers</label>
+          <input type="number" id="churnInput" value="200" min="0" oninput="calc()">
+        </div>
+        <div class="field">
+          <label>Avg subscription $ / mo</label>
+          <input type="number" id="priceInput" value="9.99" min="0" step="0.01" oninput="calc()">
+        </div>
+      </div>
+
+      <div class="slider-wrap">
+        <div class="slider-top">
+          <label>Android users</label>
+          <span class="slider-val" id="sv">55%</span>
+        </div>
+        <input type="range" id="as" min="0" max="100" value="55" style="--fill:55%" oninput="calc()">
+        <div class="slider-note">Google Play involuntary churn rate: 31% — RevenueCat SOSA 2026</div>
+      </div>
+
+      <div class="results" id="results">
+        <div class="result-hero">
+          <div class="result-hero-num" id="heroPct">17%</div>
+          <div class="result-hero-sub">of your churn is <span>ghost</span></div>
+        </div>
+
+        <div class="ring-section">
+          <div class="ring-wrap">
+            <svg class="ring-svg" viewBox="0 0 200 200">
+              <circle class="ring-track" cx="100" cy="100" r="88"/>
+              <circle class="ring-green" id="rGreen" cx="100" cy="100" r="88"/>
+              <circle class="ring-red" id="rRed" cx="100" cy="100" r="88"/>
+            </svg>
+            <div class="ring-center">
+              <div class="ring-num" id="ringNum">0</div>
+              <div class="ring-label">Ghost Users</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="split-item ghost-side">
+            <div class="split-tag"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--red)"/></svg> Ghost</div>
+            <div class="split-num" id="gN">0</div>
+            <div class="split-desc">Didn't cancel. Payment failed.</div>
+          </div>
+          <div class="split-item real-side">
+            <div class="split-tag"><svg width="6" height="6"><circle cx="3" cy="3" r="3" fill="var(--green)"/></svg> Real</div>
+            <div class="split-num" id="rN">0</div>
+            <div class="split-desc">Actually chose to leave.</div>
+          </div>
+        </div>
+
+        <div class="money-label">What this costs you</div>
+        <div class="money-grid">
+          <div class="money-card waste">
+            <div class="m-label">Wasted Win-back</div>
+            <div class="m-val" id="wV">$0</div>
+            <div class="m-sub">per month on users who want to stay</div>
+          </div>
+          <div class="money-card recover">
+            <div class="m-label">Recoverable Revenue</div>
+            <div class="m-val" id="rcV">$0</div>
+            <div class="m-sub">per month via billing retry</div>
+          </div>
+        </div>
+
+        <div class="explainer">
+          <strong>What is ghost churn?</strong> When a subscriber's payment fails — expired card, insufficient funds, bank decline — most apps count it as churn. But the user never decided to leave. Smart billing retry can recover <strong>20-40%</strong> of these users automatically.
+        </div>
+
+        <div class="source-line">
+          Data: <a href="https://www.revenuecat.com/state-of-subscription-apps-2026/" target="_blank">RevenueCat State of Subscription Apps 2026</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta reveal">
+  <div class="container">
+    <div class="cta-inner">
+      <h3>Ghost churn is invisible<br>in your dashboard.</h3>
+      <p>Your MMP counts a failed payment the same as a cancellation. Core Plan separates them — by channel, by creative.</p>
+      <a href="https://coreplan.airbridge.io/waitinglist?utm_source=ghost-churn-calculator&utm_medium=tool&utm_campaign=linkedin-gtm" class="cta-btn" target="_blank">
+        Join the Waitlist
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h8M8 4l3 3-3 3"/></svg>
+      </a>
+      <div class="cta-meta">
+        <span>15K installs free</span>
+        <span>$0.05 / install</span>
+        <span>No sales call</span>
+      </div>
+      <div class="also">Also try: <a href="https://owenchoi-kr.github.io/cps-calculator/">CPS Calculator</a></div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <a href="https://www.linkedin.com/in/owenchoi-kr/" target="_blank">Owen Choi</a> · Built with Claude Code
+</footer>
+
+<script>
+// Scroll reveal (Ease Health clip-path style)
+const obs = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
+}, { threshold: 0.15 });
+document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+// Nav hide on scroll
+let lastY = 0;
+window.addEventListener('scroll', () => {
+  const y = window.scrollY;
+  document.getElementById('nav').classList.toggle('hidden', y > lastY && y > 100);
+  lastY = y;
+}, { passive: true });
+
+// Calculator
+const CIRC = 2 * Math.PI * 88;
+
+function calc() {
+  const churn = parseInt(document.getElementById('churnInput').value) || 0;
+  const price = parseFloat(document.getElementById('priceInput').value) || 0;
+  const slider = document.getElementById('as');
+  const aPct = parseInt(slider.value) / 100;
+
+  slider.style.setProperty('--fill', slider.value + '%');
+  document.getElementById('sv').textContent = slider.value + '%';
+
+  const ghost = Math.round(Math.round(churn * aPct) * 0.31);
+  const real = churn - ghost;
+  const gPct = churn > 0 ? Math.round(ghost / churn * 100) : 0;
+  const gFrac = churn > 0 ? ghost / churn : 0;
+  const rFrac = churn > 0 ? real / churn : 0;
+
+  const el = document.getElementById('results');
+  if (churn > 0) { el.classList.add('show'); } else { el.classList.remove('show'); return; }
+
+  document.getElementById('heroPct').textContent = gPct + '%';
+  document.getElementById('rRed').style.strokeDashoffset = CIRC * (1 - gFrac);
+  const gG = document.getElementById('rGreen');
+  gG.style.strokeDashoffset = CIRC * (1 - rFrac);
+  gG.style.transform = 'rotate(' + (gFrac * 360) + 'deg)';
+  gG.style.transformOrigin = '100px 100px';
+
+  document.getElementById('ringNum').textContent = ghost;
+  document.getElementById('gN').textContent = ghost.toLocaleString();
+  document.getElementById('rN').textContent = real.toLocaleString();
+  document.getElementById('wV').textContent = '$' + Math.round(ghost * 3.5).toLocaleString();
+  document.getElementById('rcV').textContent = '$' + Math.round(ghost * price).toLocaleString();
+}
+
+calc();
+</script>
+</body>
+</html>
